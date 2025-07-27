@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rep Leaderboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    }
+  </script>
+  <style>
+    .toggle-switch {
+      cursor: pointer;
+    }
+  </style>
+  <script defer>
+    const defaultPfp = "https://cdn.discordapp.com/embed/avatars/0.png";
+    let players = JSON.parse(localStorage.getItem("players")) || [];
+    let teams = JSON.parse(localStorage.getItem("teams")) || [];
+    let adminAccess = false;
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      html.classList.toggle("dark");
+      localStorage.setItem("theme", html.classList.contains("dark") ? "dark" : "light");
+    }
+
+    function applySavedTheme() {
+      const savedTheme = localStorage.getItem("theme");
+      if (savedTheme === "dark") document.documentElement.classList.add("dark");
+    }
+
+    function saveData() {
+      localStorage.setItem("players", JSON.stringify(players));
+      localStorage.setItem("teams", JSON.stringify(teams));
+    }
+
+    function renderPage(page) {
+      document.getElementById("playersPage").classList.add("hidden");
+      document.getElementById("teamsPage").classList.add("hidden");
+      document.getElementById(page).classList.remove("hidden");
+    }
+
+    function renderLeaderboard() {
+      const query = document.getElementById("search").value.toLowerCase();
+      const container = document.getElementById("leaderboard");
+      container.innerHTML = "";
+
+      players
+        .sort((a, b) => b.rep - a.rep)
+        .filter((p) => p.name.toLowerCase().includes(query))
+        .forEach((player, i) => {
+          const medalIcons = ["🥇", "🥈", "🥉"];
+          const rankDisplay = i < 3 ? medalIcons[i] : i + 1;
+
+          const playerCard = document.createElement("div");
+          playerCard.className =
+            "flex items-center justify-between bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm text-sm my-2 hover:shadow-md transition-all duration-300";
+          playerCard.innerHTML = `
+            <div class="flex items-center gap-3">
+              <div class="text-xs text-gray-400 w-6 text-right">${rankDisplay}</div>
+              <img src="${player.avatar}" class="w-8 h-8 rounded-full" alt="pfp" />
+              <div class="text-gray-800 dark:text-gray-100">
+                <div class="font-medium text-sm">${player.name}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-300">Rep: ${player.rep}</div>
+              </div>
+            </div>
+            ${adminAccess ? `
+              <div class="flex gap-2 items-center">
+                <input type="number" onchange="updateRep(${player.id}, this.value)" placeholder="Update Rep" class="w-20 text-xs px-2 py-1 border rounded text-black">
+                <button onclick="removePlayer(${player.id})" class="text-xs bg-red-500 text-white px-2 py-1 rounded">Remove</button>
+              </div>
+            ` : ""}
+          `;
+          container.appendChild(playerCard);
+        });
+    }
+
+    function renderTeams() {
+      const container = document.getElementById("teams");
+      container.innerHTML = "";
+
+      teams
+        .sort((a, b) => b.points - a.points)
+        .forEach((team, i) => {
+          const teamCard = document.createElement("div");
+          teamCard.className = "flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded-xl shadow text-sm my-2";
+          teamCard.innerHTML = `
+            <div>
+              <div class="font-semibold">${team.name}</div>
+              <div class="text-xs text-gray-500">Points: ${team.points}, Wins: ${team.wins}</div>
+            </div>
+            ${adminAccess ? `
+              <div class="flex gap-2 items-center">
+                <input type="number" onchange="updateTeamPoints(${team.id}, this.value)" placeholder="Points" class="w-20 text-xs px-2 py-1 border rounded text-black">
+                <input type="number" onchange="updateTeamWins(${team.id}, this.value)" placeholder="Wins" class="w-20 text-xs px-2 py-1 border rounded text-black">
+                <button onclick="removeTeam(${team.id})" class="text-xs bg-red-500 text-white px-2 py-1 rounded">Remove</button>
+              </div>
+            ` : ""}
+          `;
+          container.appendChild(teamCard);
+        });
+    }
+
+    function updateRep(id, rep) {
+      const repInt = parseInt(rep);
+      if (!isNaN(repInt)) {
+        players = players.map((p) => p.id === id ? { ...p, rep: repInt } : p);
+        saveData();
+        renderLeaderboard();
+      }
+    }
+
+    function updateTeamPoints(id, val) {
+      const pts = parseInt(val);
+      if (!isNaN(pts)) {
+        teams = teams.map(t => t.id === id ? { ...t, points: pts } : t);
+        saveData();
+        renderTeams();
+      }
+    }
+
+    function updateTeamWins(id, val) {
+      const wins = parseInt(val);
+      if (!isNaN(wins)) {
+        teams = teams.map(t => t.id === id ? { ...t, wins: wins } : t);
+        saveData();
+        renderTeams();
+      }
+    }
+
+    function removePlayer(id) {
+      players = players.filter((p) => p.id !== id);
+      saveData();
+      renderLeaderboard();
+    }
+
+    function removeTeam(id) {
+      teams = teams.filter((t) => t.id !== id);
+      saveData();
+      renderTeams();
+    }
+
+    function addPlayer() {
+      const name = document.getElementById("playerName").value.trim();
+      const discordId = document.getElementById("discordId").value.trim();
+      const discordAvatar = document.getElementById("discordAvatar").value.trim();
+      if (!name) return;
+
+      const newPlayer = {
+        id: Date.now(),
+        name,
+        rep: 0,
+        avatar: discordId && discordAvatar
+          ? `https://cdn.discordapp.com/avatars/${discordId}/${discordAvatar}.png`
+          : defaultPfp,
+      };
+
+      players.push(newPlayer);
+      saveData();
+      renderLeaderboard();
+
+      document.getElementById("playerName").value = "";
+      document.getElementById("discordId").value = "";
+      document.getElementById("discordAvatar").value = "";
+    }
+
+    function addTeam() {
+      const name = document.getElementById("teamName").value.trim();
+      if (!name) return;
+      const newTeam = { id: Date.now(), name, points: 0, wins: 0 };
+      teams.push(newTeam);
+      saveData();
+      renderTeams();
+      document.getElementById("teamName").value = "";
+    }
+
+    function accessAdmin() {
+      const input = document.getElementById("adminCode").value.trim();
+      if (input === "1010999") {
+        adminAccess = true;
+        document.getElementById("addPlayerForm").classList.remove("hidden");
+        document.getElementById("addTeamForm").classList.remove("hidden");
+        document.getElementById("admin-section").classList.add("hidden");
+        renderLeaderboard();
+        renderTeams();
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      applySavedTheme();
+      renderLeaderboard();
+      renderTeams();
+      document.getElementById("search").addEventListener("input", renderLeaderboard);
+    });
+  </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen p-6">
+  <div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex justify-between items-center">
+      <h1 class="text-4xl font-bold flex gap-2 items-center">
+        Rep Leaderboard <span class="animate-bounce text-blue-500">✨</span>
+      </h1>
+      <button onclick="toggleTheme()" class="toggle-switch text-sm bg-gray-300 dark:bg-gray-700 text-black dark:text-white px-4 py-1 rounded">
+        ☀️/🌙
+      </button>
+    </div>
+    <div class="flex gap-4 mb-4">
+      <button onclick="renderPage('playersPage')" class="px-4 py-2 bg-blue-500 text-white rounded">Players</button>
+      <button onclick="renderPage('teamsPage')" class="px-4 py-2 bg-green-600 text-white rounded">Teams</button>
+    </div>
+
+    <div id="playersPage">
+      <input type="text" placeholder="Search player..." id="search"
+        class="w-full px-4 py-2 rounded-lg shadow-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+      <div id="leaderboard" class="max-h-[500px] overflow-y-auto"></div>
+    </div>
+
+    <div id="teamsPage" class="hidden">
+      <div id="teams" class="max-h-[500px] overflow-y-auto"></div>
+    </div>
+
+    <div class="flex gap-2" id="admin-section">
+      <input type="password" placeholder="Enter Admin Code" id="adminCode"
+        class="w-60 px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" />
+      <button onclick="accessAdmin()" class="bg-blue-500 text-white px-4 py-2 rounded">Access Admin</button>
+    </div>
+
+    <div id="addPlayerForm" class="hidden bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md space-y-2">
+      <h2 class="text-lg font-semibold">Add Player</h2>
+      <input id="playerName" placeholder="Player Name"
+        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-black" />
+      <input id="discordId" placeholder="Discord ID (optional)"
+        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-black" />
+      <input id="discordAvatar" placeholder="Discord Avatar Hash (optional)"
+        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-black" />
+      <button onclick="addPlayer()" class="bg-green-500 text-white px-4 py-2 rounded text-sm">Add Player</button>
+    </div>
+
+    <div id="addTeamForm" class="hidden bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md space-y-2">
+      <h2 class="text-lg font-semibold">Add Team</h2>
+      <input id="teamName" placeholder="Team Name"
+        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-black" />
+      <button onclick="addTeam()" class="bg-green-600 text-white px-4 py-2 rounded text-sm">Add Team</button>
+    </div>
+  </div>
+</body>
+</html>
